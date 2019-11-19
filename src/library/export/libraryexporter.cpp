@@ -1,7 +1,5 @@
 #include "library/export/libraryexporter.h"
 
-#include <QThreadPool>
-
 #include "library/export/enginelibraryexportjob.h"
 
 namespace mixxx {
@@ -9,11 +7,13 @@ namespace mixxx {
 LibraryExporter::LibraryExporter(QWidget *parent,
         UserSettingsPointer pConfig,
         TrackCollection &trackCollection,
-        AnalysisFeature &analysisFeature)
+        AnalysisFeature &analysisFeature,
+        std::shared_ptr<JobScheduler> pScheduler)
         : QWidget{parent},
           m_pConfig{std::move(pConfig)},
           m_trackCollection{trackCollection},
-          m_analysisFeature{analysisFeature} {
+          m_analysisFeature{analysisFeature},
+          m_pScheduler{std::move(pScheduler)} {
 }
 
 void LibraryExporter::requestExport() {
@@ -34,14 +34,10 @@ void LibraryExporter::requestExport() {
 
 void LibraryExporter::beginEngineLibraryExport(
         EngineLibraryExportRequest request) {
-    // Run the job in a background thread.
-    auto *pJobThread = new EngineLibraryExportJob{
-        this, m_trackCollection, m_analysisFeature, std::move(request)};
-    connect(pJobThread, &EngineLibraryExportJob::finished,
-            pJobThread, &QObject::deleteLater);
-    pJobThread->start();
+    EngineLibraryExportJob job{m_trackCollection, std::move(request)};
+    m_pScheduler->run(job);
 
-    // TODO (mr-smidge) - construct a modal dialog to monitor job progress.
+    // TODO (mrsmidge) - construct a modal dialog to monitor job progress.
 }
 
 } // namespace mixxx

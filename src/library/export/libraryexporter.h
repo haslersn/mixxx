@@ -4,6 +4,7 @@
 
 #include <QWidget>
 
+#include "jobs/jobscheduler.h"
 #include "library/export/dlglibraryexport.h"
 #include "library/export/enginelibraryexportrequest.h"
 #include "preferences/usersettings.h"
@@ -24,7 +25,8 @@ class LibraryExporter : public QWidget {
     LibraryExporter(QWidget* parent,
             UserSettingsPointer pConfig,
             TrackCollection& trackCollection,
-            AnalysisFeature& analysisFeature);
+            AnalysisFeature& analysisFeature,
+            std::shared_ptr<JobScheduler> pScheduler);
 
   public slots:
     // Begin the process of a library export.
@@ -37,6 +39,7 @@ class LibraryExporter : public QWidget {
     UserSettingsPointer m_pConfig;
     TrackCollection& m_trackCollection;
     AnalysisFeature& m_analysisFeature;
+    std::shared_ptr<JobScheduler> m_pScheduler;
     parented_ptr<DlgLibraryExport> m_pDialog;
 };
 
