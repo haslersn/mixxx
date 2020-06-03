@@ -17,12 +17,12 @@ namespace mixxx {
 
 namespace {
 
-const std::string MixxxRootCrateName = "Mixxx";
+const std::string kMixxxRootCrateName = "Mixxx";
 
-const QStringList SupportedFileTypes = {"mp3", "flac", "ogg"};
+const QStringList kSupportedFileTypes = {"mp3", "flac", "ogg"};
 
 std::optional<djinterop::musical_key> toDjinteropKey(
-        mixxx::track::io::key::ChromaticKey key) {
+        track::io::key::ChromaticKey key) {
     static const std::array<std::optional<djinterop::musical_key>, 25> keyMap{{
             std::nullopt,                          // INVALID = 0,
             djinterop::musical_key::c_major,       // C_MAJOR = 1,
@@ -254,7 +254,7 @@ void exportTrack(TrackCollection& trackCollection,
     }
 
     // Only export supported file types.
-    if (!SupportedFileTypes.contains(pTrack->getType())) {
+    if (!kSupportedFileTypes.contains(pTrack->getType())) {
         qInfo() << "Skipping file" << pTrack->getFileInfo().fileName()
             << "(id" << pTrack->getId() << ") as its file type"
             << pTrack->getType() << "is not supported";
@@ -290,16 +290,20 @@ void exportCrate(TrackCollection& trackCollection,
 
 } // namespace
 
-EnginePrimeExportJob::EnginePrimeExportJob(QObject* parent,
-        TrackCollectionManager& trackCollectionManager,
-        TrackLoader& trackLoader,
+EnginePrimeExportJob::EnginePrimeExportJob(
+        QObject* parent,
+        TrackCollectionManager* pTrackCollectionManager,
+        TrackLoader* pTrackLoader,
         EnginePrimeExportRequest request)
-        : QThread(parent), m_trackCollectionManager(trackCollectionManager), m_trackLoader(trackLoader), m_request{std::move(request)} {
+    : QThread(parent),
+      m_pTrackCollectionManager(pTrackCollectionManager),
+      m_pTrackLoader(pTrackLoader),
+      m_request{std::move(request)} {
     // Note that the `trackLoaded()` slot will, by default, execute in whatever
     // thread constructs this object, and not this object's worker thread.  This
     // is not a problem, as the slot simply enqueues each loaded track for
     // subsequent processing in the worker thread.
-    connect(&m_trackLoader, &TrackLoader::trackLoaded,
+    connect(m_pTrackLoader, &TrackLoader::trackLoaded,
             this, &EnginePrimeExportJob::trackLoaded);
 }
 
@@ -321,11 +325,11 @@ void EnginePrimeExportJob::trackLoaded(TrackRef trackRef, TrackPointer trackPtr)
 // Obtain a set of all track refs across all directories in the whole Mixxx library.
 QSet<TrackRef> EnginePrimeExportJob::getAllTrackRefs() const {
     QSet<TrackRef> trackRefs;
-    auto dirs = m_trackCollectionManager.internalCollection()
+    auto dirs = m_pTrackCollectionManager->internalCollection()
                         ->getDirectoryDAO()
                         .getDirs();
     for (auto iter = dirs.cbegin(); iter != dirs.cend(); ++iter) {
-        trackRefs.unite(m_trackCollectionManager.internalCollection()
+        trackRefs.unite(m_pTrackCollectionManager->internalCollection()
                                 ->getTrackDAO()
                                 .getAllTrackRefs(*iter)
                                 .toSet());
@@ -338,12 +342,12 @@ QSet<TrackRef> EnginePrimeExportJob::getTracksRefsInCrates(
         const QSet<CrateId>& crateIds) const {
     QSet<TrackRef> trackRefs;
     for (auto iter = crateIds.cbegin(); iter != crateIds.cend(); ++iter) {
-        auto result = m_trackCollectionManager.internalCollection()
+        auto result = m_pTrackCollectionManager->internalCollection()
                               ->crates()
                               .selectCrateTracksSorted(*iter);
         while (result.next()) {
             auto trackId = result.trackId();
-            auto location = m_trackCollectionManager.internalCollection()
+            auto location = m_pTrackCollectionManager->internalCollection()
                                     ->getTrackDAO()
                                     .getTrackLocation(trackId);
             auto trackFile = TrackFile(location);
@@ -373,7 +377,7 @@ void EnginePrimeExportJob::run() {
         for (auto iter = trackRefs.cbegin(); iter != trackRefs.cend(); ++iter) {
             trackIds.append(iter->getId());
         }
-        crateIds = m_trackCollectionManager.internalCollection()
+        crateIds = m_pTrackCollectionManager->internalCollection()
                            ->crates()
                            .collectCrateIdsOfTracks(trackIds);
     }
@@ -403,7 +407,8 @@ void EnginePrimeExportJob::run() {
     // Load all tracks (asynchronously).
     m_trackRefs = trackRefs.toList();
     for (auto iter = m_trackRefs.cbegin(); iter != m_trackRefs.cend(); ++iter) {
-        m_trackLoader.invokeSlotLoadTrack(*iter);
+        // Note: the call to `invokeSlotLoadTrack` is explicitly thread-safe.
+        m_pTrackLoader->invokeSlotLoadTrack(*iter);
     }
 
     // Run a consumer queue, waiting for tracks that have been loaded.
@@ -438,7 +443,7 @@ void EnginePrimeExportJob::run() {
 
         qInfo() << "Exporting track" << pTrack->getId().value() << "at"
             << pTrack->getFileInfo().location() << "...";
-        exportTrack(*m_trackCollectionManager.internalCollection(), m_request,
+        exportTrack(*m_pTrackCollectionManager->internalCollection(), m_request,
                 *m_pDb, m_mixxxToEnginePrimeTrackIdMap, pTrack);
 
         ++currProgress;
@@ -448,10 +453,10 @@ void EnginePrimeExportJob::run() {
     // We will ensure that there is a special top-level crate representing the
     // root of all Mixxx-exported items.  Mixxx tracks and crates will exist
     // underneath this crate.
-    auto optionalExtRootCrate = m_pDb->root_crate_by_name(MixxxRootCrateName);
+    auto optionalExtRootCrate = m_pDb->root_crate_by_name(kMixxxRootCrateName);
     auto extRootCrate = optionalExtRootCrate
             ? optionalExtRootCrate.value()
-            : m_pDb->create_root_crate(MixxxRootCrateName);
+            : m_pDb->create_root_crate(kMixxxRootCrateName);
     for (const TrackRef& trackRef : trackRefs) {
         // Add each track to the root crate, even if it also belongs to others.
         if (!m_mixxxToEnginePrimeTrackIdMap.contains(trackRef.getId())) {
@@ -476,7 +481,7 @@ void EnginePrimeExportJob::run() {
         }
 
         qInfo() << "Exporting crate" << crateId.value() << "...";
-        exportCrate(*m_trackCollectionManager.internalCollection(),
+        exportCrate(*m_pTrackCollectionManager->internalCollection(),
                 extRootCrate,
                 m_mixxxToEnginePrimeTrackIdMap,
                 crateId);

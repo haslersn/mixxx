@@ -12,6 +12,7 @@
 #include "library/crate/crateid.h"
 #include "library/export/engineprimeexportrequest.h"
 #include "preferences/usersettings.h"
+#include "util/optional.h"
 #include "util/parented_ptr.h"
 
 class TrackCollectionManager;
@@ -29,8 +30,15 @@ class DlgLibraryExport : public QDialog {
 
   public:
     DlgLibraryExport(
-            QWidget* parent, UserSettingsPointer pConfig, TrackCollectionManager& trackCollectionManager);
-    void setSelectedCrate(CrateId crateId);
+            QWidget* parent,
+            UserSettingsPointer pConfig,
+            TrackCollectionManager* pTrackCollectionManager);
+
+    /// Set the specified crate to be selected for export on the dialog.  If no
+    /// crate is provided (i.e. `std::nullopt`), then the dialog will be ready
+    //  to export the whole library.  If an unknown crate is provided, then no
+    /// action is taken.
+    void setSelectedCrate(std::optional<CrateId> crateId);
 
   signals:
     /// The startEnginePrimeExport signal is emitted when sufficient information
@@ -39,14 +47,12 @@ class DlgLibraryExport : public QDialog {
     void startEnginePrimeExport(EnginePrimeExportRequest) const;
 
   private slots:
-    void exportWholeLibrarySelected();
-    void exportSelectedCratedSelected();
     void browseExportDirectory();
     void exportRequested();
 
   private:
     UserSettingsPointer m_pConfig;
-    TrackCollectionManager& m_trackCollectionManager;
+    TrackCollectionManager* m_pTrackCollectionManager;
 
     parented_ptr<QRadioButton> m_pWholeLibraryRadio;
     parented_ptr<QRadioButton> m_pCratesRadio;

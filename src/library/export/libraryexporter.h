@@ -7,6 +7,7 @@
 #include "library/crate/crateid.h"
 #include "library/export/dlglibraryexport.h"
 #include "library/export/engineprimeexportrequest.h"
+#include "library/trackloader.h"
 #include "preferences/usersettings.h"
 #include "util/optional.h"
 #include "util/parented_ptr.h"
@@ -14,7 +15,6 @@
 class TrackCollectionManager;
 
 namespace mixxx {
-class TrackLoader;
 
 /// The LibraryExporter class allows an export of the Mixxx library to be
 /// initiated.  It can present a dialog that gathers information from the user
@@ -24,7 +24,7 @@ class LibraryExporter : public QWidget {
   public:
     LibraryExporter(QWidget* parent,
             UserSettingsPointer pConfig,
-            TrackCollectionManager& trackCollectionManager);
+            TrackCollectionManager* pTrackCollectionManager);
 
   public slots:
     /// Begin the process of a library export.
@@ -42,8 +42,8 @@ class LibraryExporter : public QWidget {
             std::optional<CrateId> initialSelectedCrate);
 
     UserSettingsPointer m_pConfig;
-    TrackCollectionManager& m_trackCollectionManager;
-    TrackLoader* m_pTrackLoader;
+    TrackCollectionManager* m_pTrackCollectionManager;
+    parented_ptr<TrackLoader> m_pTrackLoader;
     parented_ptr<DlgLibraryExport> m_pDialog;
 };
 

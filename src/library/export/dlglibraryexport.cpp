@@ -11,32 +11,43 @@
 #include <djinterop/enginelibrary.hpp>
 
 #include "library/crate/crateid.h"
+#include "library/crate/cratestorage.h"
 #include "library/export/engineprimeexportrequest.h"
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
-
-static const QString DefaultMixxxExportDirName = "mixxx-export";
 
 namespace el = djinterop::enginelibrary;
 
 namespace mixxx {
 
-DlgLibraryExport::DlgLibraryExport(
-        QWidget* parent, UserSettingsPointer pConfig, TrackCollectionManager& trackCollectionManager)
-        : QDialog(parent), m_pConfig{pConfig}, m_trackCollectionManager{trackCollectionManager} {
-    // Selectable list of crates from the Mixxx library.
-    m_pCratesList = make_parented<QListWidget>();
-    m_pCratesList->setSelectionMode(QListWidget::ExtendedSelection);
-    {
+namespace {
+    const QString kDefaultMixxxExportDirName = QStringLiteral("mixxx-export");
+
+    void populateCrates(
+            QListWidget& listWidget,
+            const TrackCollection &trackCollection) {
         // Populate list of crates.
-        auto crates = m_trackCollectionManager.internalCollection()->crates().selectCrates();
+        CrateSelectResult crates = trackCollection.crates().selectCrates();
         Crate crate;
         while (crates.populateNext(&crate)) {
             auto pItem = std::make_unique<QListWidgetItem>(crate.getName());
             pItem->setData(Qt::UserRole, crate.getId().value());
-            m_pCratesList->addItem(pItem.release());
+            listWidget.addItem(pItem.release());
         }
     }
+}
+
+DlgLibraryExport::DlgLibraryExport(
+        QWidget* parent,
+        UserSettingsPointer pConfig,
+        TrackCollectionManager* pTrackCollectionManager)
+    : QDialog(parent),
+      m_pConfig{pConfig},
+      m_pTrackCollectionManager{pTrackCollectionManager} {
+    // Selectable list of crates from the Mixxx library.
+    m_pCratesList = make_parented<QListWidget>();
+    m_pCratesList->setSelectionMode(QListWidget::ExtendedSelection);
+    populateCrates(*m_pCratesList, *m_pTrackCollectionManager->internalCollection());
 
     // Read-only text fields showing key directories for export.
     m_pBaseDirectoryTextField = make_parented<QLineEdit>();
@@ -50,16 +61,16 @@ DlgLibraryExport::DlgLibraryExport(
     // or just tracks in a selection of crates.
     m_pWholeLibraryRadio = make_parented<QRadioButton>(tr("Entire music library"));
     m_pWholeLibraryRadio->setChecked(true);
-    this->exportWholeLibrarySelected();
+    m_pCratesList->setEnabled(false);
     connect(m_pWholeLibraryRadio,
             &QRadioButton::clicked,
             this,
-            &DlgLibraryExport::exportWholeLibrarySelected);
+            [this]() { m_pCratesList->setEnabled(false); });
     m_pCratesRadio = make_parented<QRadioButton>(tr("Selected crates"));
     connect(m_pCratesRadio,
             &QRadioButton::clicked,
             this,
-            &DlgLibraryExport::exportSelectedCratedSelected);
+            [this]() { m_pCratesList->setEnabled(true); });
 
     // Button to allow ability to browse for the export directory.
     auto pExportDirBrowseButton = make_parented<QPushButton>(tr("Browse"));
@@ -106,27 +117,23 @@ DlgLibraryExport::DlgLibraryExport(
     activateWindow();
 }
 
-void DlgLibraryExport::setSelectedCrate(CrateId crateId) {
+void DlgLibraryExport::setSelectedCrate(std::optional<CrateId> crateId) {
+    if (!crateId) {
+        m_pWholeLibraryRadio->setChecked(true);
+        m_pCratesList->setEnabled(false);
+        return;
+    }
+
     m_pCratesRadio->setChecked(true);
-    exportSelectedCratedSelected();
+    m_pCratesList->setEnabled(true);
     for (auto i = 0; i < m_pCratesList->count(); ++i) {
         auto* pItem = m_pCratesList->item(i);
         auto currCrateId = pItem->data(Qt::UserRole).toInt();
-        if (currCrateId == crateId.value()) {
+        if (currCrateId == crateId.value().value()) {
             m_pCratesList->setCurrentItem(pItem);
             return;
         }
     }
-}
-
-void DlgLibraryExport::exportWholeLibrarySelected() {
-    // Disallow selection of individual crates.
-    m_pCratesList->setEnabled(false);
-}
-
-void DlgLibraryExport::exportSelectedCratedSelected() {
-    // Allow selection of individual crates
-    m_pCratesList->setEnabled(true);
 }
 
 void DlgLibraryExport::browseExportDirectory() {
@@ -144,7 +151,7 @@ void DlgLibraryExport::browseExportDirectory() {
     QDir baseExportDirectory{baseDirectory};
     auto databaseDirectory = baseExportDirectory.filePath(
             el::default_database_dir_name);
-    auto musicDirectory = baseExportDirectory.filePath(DefaultMixxxExportDirName);
+    auto musicDirectory = baseExportDirectory.filePath(kDefaultMixxxExportDirName);
 
     m_pBaseDirectoryTextField->setText(baseDirectory);
     m_pDatabaseDirectoryTextField->setText(databaseDirectory);

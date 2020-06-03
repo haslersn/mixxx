@@ -26,7 +26,10 @@ class EnginePrimeExportJob : public QThread {
     Q_OBJECT
   public:
     EnginePrimeExportJob(
-            QObject* parent, TrackCollectionManager& trackCollectionManager, TrackLoader& trackLoader, EnginePrimeExportRequest request);
+            QObject* parent,
+            TrackCollectionManager* pTrackCollectionManager,
+            TrackLoader* pTrackLoader,
+            EnginePrimeExportRequest request);
 
     void run() override;
 
@@ -51,8 +54,8 @@ class EnginePrimeExportJob : public QThread {
     QWaitCondition m_waitAnyTrack;
     bool m_cancellationRequested = false;
 
-    TrackCollectionManager& m_trackCollectionManager;
-    TrackLoader& m_trackLoader;
+    TrackCollectionManager* m_pTrackCollectionManager;
+    TrackLoader* m_pTrackLoader;
     EnginePrimeExportRequest m_request;
     QHash<TrackId, int64_t> m_mixxxToEnginePrimeTrackIdMap;
     std::unique_ptr<djinterop::database> m_pDb;

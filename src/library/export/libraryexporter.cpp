@@ -10,18 +10,19 @@ namespace mixxx {
 
 LibraryExporter::LibraryExporter(QWidget* parent,
         UserSettingsPointer pConfig,
-        TrackCollectionManager& trackCollectionManager)
+        TrackCollectionManager* pTrackCollectionManager)
         : QWidget{parent},
           m_pConfig{std::move(pConfig)},
-          m_trackCollectionManager{trackCollectionManager},
+          m_pTrackCollectionManager{pTrackCollectionManager},
           m_pTrackLoader{nullptr} {
-    m_pTrackLoader = new TrackLoader(&m_trackCollectionManager, this);
+    m_pTrackLoader = make_parented<TrackLoader>(m_pTrackCollectionManager, this);
 }
 
 void LibraryExporter::requestExportWithOptionalInitialCrate(
         std::optional<CrateId> initialSelectedCrate) {
     if (!m_pDialog) {
-        m_pDialog = make_parented<DlgLibraryExport>(this, m_pConfig, m_trackCollectionManager);
+        m_pDialog = make_parented<DlgLibraryExport>(
+                this, m_pConfig, m_pTrackCollectionManager);
         connect(m_pDialog.get(),
                 SIGNAL(startEnginePrimeExport(EnginePrimeExportRequest)),
                 this,
@@ -34,16 +35,14 @@ void LibraryExporter::requestExportWithOptionalInitialCrate(
                 Qt::WindowActive);
     }
 
-    if (initialSelectedCrate) {
-        m_pDialog->setSelectedCrate(initialSelectedCrate.value());
-    }
+    m_pDialog->setSelectedCrate(initialSelectedCrate);
 }
 
 void LibraryExporter::beginEnginePrimeExport(
         EnginePrimeExportRequest request) {
     // Note that the job will run in a background thread.
     auto* pJobThread = new EnginePrimeExportJob{
-            this, m_trackCollectionManager, *m_pTrackLoader, std::move(request)};
+            this, m_pTrackCollectionManager, m_pTrackLoader, std::move(request)};
     connect(pJobThread, &EnginePrimeExportJob::finished, pJobThread, &QObject::deleteLater);
 
     // Construct a dialog to monitor job progress and offer cancellation.
