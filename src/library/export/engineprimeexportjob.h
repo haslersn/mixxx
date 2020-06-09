@@ -1,20 +1,22 @@
 #pragma once
 
-#include <memory>
-
-#include <QHash>
+#include <QAtomicInteger>
 #include <QList>
 #include <QMutex>
 #include <QQueue>
 #include <QSet>
 #include <QThread>
 #include <QWaitCondition>
-
 #include <djinterop/database.hpp>
+#include <memory>
 
+#include "library/crate/crate.h"
+#include "library/crate/crateid.h"
 #include "library/export/engineprimeexportrequest.h"
 #include "library/trackcollectionmanager.h"
-#include "library/trackloader.h"
+#include "track/track.h"
+#include "track/trackid.h"
+#include "track/trackref.h"
 
 namespace mixxx {
 
@@ -28,7 +30,6 @@ class EnginePrimeExportJob : public QThread {
     EnginePrimeExportJob(
             QObject* parent,
             TrackCollectionManager* pTrackCollectionManager,
-            TrackLoader* pTrackLoader,
             EnginePrimeExportRequest request);
 
     void run() override;
@@ -41,24 +42,28 @@ class EnginePrimeExportJob : public QThread {
     void cancel();
 
   private slots:
-    void trackLoaded(TrackRef trackRef, TrackPointer trackPtr);
+    // These slots are used to load data from the Mixxx database on the main
+    // thread of the application, which will be different to the worker thread
+    // used by an instance of this class.
+    void loadIds(QSet<CrateId> crateIdsToExport);
+    void loadTrack(TrackRef trackRef);
+    void loadCrate(CrateId crateId);
 
   private:
-    QSet<TrackRef> getAllTrackRefs() const;
-    QSet<TrackRef> getTracksRefsInCrates(const QSet<CrateId>& crateIds) const;
+    QMutex m_mainThreadLoadMutex;
+    QWaitCondition m_waitForMainThreadLoad;
 
     QList<TrackRef> m_trackRefs;
-    QQueue<TrackPointer> m_loadedTrackQueue;
-    int m_tracksLoaded = 0;
-    QMutex m_trackMutex;
-    QWaitCondition m_waitAnyTrack;
-    bool m_cancellationRequested = false;
+    QList<CrateId> m_crateIds;
+    TrackPointer m_pLastLoadedTrack;
+    std::unique_ptr<Waveform> m_pLastLoadedWaveform;
+    Crate m_lastLoadedCrate;
+    QList<TrackId> m_lastLoadedCrateTrackIds;
+
+    QAtomicInteger<int> m_cancellationRequested;
 
     TrackCollectionManager* m_pTrackCollectionManager;
-    TrackLoader* m_pTrackLoader;
     EnginePrimeExportRequest m_request;
-    QHash<TrackId, int64_t> m_mixxxToEnginePrimeTrackIdMap;
-    std::unique_ptr<djinterop::database> m_pDb;
 };
 
 } // namespace mixxx

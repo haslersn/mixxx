@@ -4,7 +4,7 @@
 #include <QThreadPool>
 
 #include "library/export/engineprimeexportjob.h"
-#include "library/trackloader.h"
+#include "util/parented_ptr.h"
 
 namespace mixxx {
 
@@ -13,10 +13,7 @@ LibraryExporter::LibraryExporter(QWidget* parent,
         TrackCollectionManager* pTrackCollectionManager)
         : QWidget{parent},
           m_pConfig{std::move(pConfig)},
-          m_pTrackCollectionManager{pTrackCollectionManager},
-          m_pTrackLoader{nullptr} {
-    m_pTrackLoader = make_parented<TrackLoader>(m_pTrackCollectionManager, this);
-}
+          m_pTrackCollectionManager{pTrackCollectionManager} {}
 
 void LibraryExporter::requestExportWithOptionalInitialCrate(
         std::optional<CrateId> initialSelectedCrate) {
@@ -41,12 +38,14 @@ void LibraryExporter::requestExportWithOptionalInitialCrate(
 void LibraryExporter::beginEnginePrimeExport(
         EnginePrimeExportRequest request) {
     // Note that the job will run in a background thread.
-    auto* pJobThread = new EnginePrimeExportJob{
-            this, m_pTrackCollectionManager, m_pTrackLoader, std::move(request)};
+    auto pJobThread = make_parented<EnginePrimeExportJob>(
+            this,
+            m_pTrackCollectionManager,
+            std::move(request));
     connect(pJobThread, &EnginePrimeExportJob::finished, pJobThread, &QObject::deleteLater);
 
     // Construct a dialog to monitor job progress and offer cancellation.
-    auto *pd = new QProgressDialog(this);
+    auto pd = make_parented<QProgressDialog>(this);
     pd->setLabelText(tr("Exporting to Engine Prime..."));
     pd->setMinimumDuration(0);
     connect(pJobThread, &EnginePrimeExportJob::jobMaximum, pd, &QProgressDialog::setMaximum);

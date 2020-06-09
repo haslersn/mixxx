@@ -7,7 +7,6 @@
 #include "library/crate/crateid.h"
 #include "library/export/dlglibraryexport.h"
 #include "library/export/engineprimeexportrequest.h"
-#include "library/trackloader.h"
 #include "preferences/usersettings.h"
 #include "util/optional.h"
 #include "util/parented_ptr.h"
@@ -43,7 +42,6 @@ class LibraryExporter : public QWidget {
 
     UserSettingsPointer m_pConfig;
     TrackCollectionManager* m_pTrackCollectionManager;
-    parented_ptr<TrackLoader> m_pTrackLoader;
     parented_ptr<DlgLibraryExport> m_pDialog;
 };
 
